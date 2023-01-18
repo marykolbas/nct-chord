@@ -1,0 +1,37 @@
+<html lang="en">
+  <head>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <link rel="stylesheet" type="text/css" href="styles.css" media="all"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NCT Chord Project</title>
+  </head> 
+  <body>
+    <div id="header_nav">
+        <h1>NCT Chord Project</h1>
+        <a href="index.html">Return to the visualization</a>
+    </div>
+    <main class="details_page">
+        <h2>What is the NCT Chord Project?</h2>
+        <p>The NCT Chord Project is a personal project I created over Winter Break (2022-2023), applying skills learned in INFO 3300 (Data Driven Web Applications)
+            the semester prior. It was inspired by a <a href="https://marykolbas.github.io/public/LinAlgNetworksProj.pdf" target="_blank">short math project</a> 
+            completed in Fall 2020 that illustrated a network of (then 18) NCT members and their collaborations on songs. 
+        </p>
+        <h2>Dataset</h2>
+        <p>
+            The dataset used behind the scenes of this visualization was made manually using discography and line distribution information from Wikipedia, Spotify, and YouTube.
+            This method is prone to human error, so if you find any mistakes regarding the dataset, please let me know! 
+        </p>
+        <p>The dataset includes songs from debut (NCT U's <em>The 7th Sense</em> released in April 2016) 
+            to WayV's 4th EP <em>Phantom</em> released in Dec 2022. The dataset does not include Live Albums (NEO CITY: SEOUL - The Origin, THE DREAM SHOW), <em>Let's Shut Up & Dance</em> (Jason Derulo),
+            iScreaM Remixes, or Apple's <em>Up Next Session: NCT 127</em>. SM Station or STATION3 songs were included when more than one NCT member participated on the same track. 
+            Some Intros, Outros, and Interludes were ommitted if there is no clear indication of who is speaking.
+        The dataset does not double-count rereleased songs on repackaged albums.</p>
+        <p>"Full Units" refer to songs released under a particular unit with all active members at that time on the same track. This includes historical lineups, such as NCT 127 with 5 members (<em>Fire Truck</em>), 
+        7 members (<em>Limitless</em>), 9 members with WinWin, 9 members with Jungwoo, etc. This rule was applied similarly to NCT DREAM (in regards to Jaemin and Mark's temporary departures) and WayV (WinWin and Lucas). </p>
+        <h2>Pre-processing</h2>
+        <p>The manually-created CSV has been processed in Python to create the JSON files used in creating the Chord Diagram. This code can be found on
+            <a href="https://github.com/marykolbas">Github</a>, along with the CSVs and JSONs used for this visualization.
+        </p>
+    </main>
+    </body>
+    </html>

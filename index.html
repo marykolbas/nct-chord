@@ -1,0 +1,602 @@
+<html lang="en">
+  <head>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <link rel="stylesheet" type="text/css" href="styles.css" media="all"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NCT Chord Project</title>
+  </head> 
+  <body>
+    <div id="header_nav">
+        <h1>NCT Chord Project</h1>
+        <a href="details.html">Read more about this project and dataset</a>
+    </div>
+    <div id="pagesizewarning">
+        At this time, this visualization requires a screen width of over 1270px! Please use a desktop to view or expand the window. 
+    </div>
+    <main>
+        <div id="subunits_toggle_container">
+            <div class="row">
+                <label for="subunits" id="togglelabel">Unique Subunits Only</label>
+                <label class="subunits_switch" for="subunits">
+                    <input type="checkbox" id="subunits">
+                    <span class="slider round"></span>
+                </label>
+            </div>
+            <div id="subunits_instructions">
+                By default, all songs are included in the Chord Diagram (excluding live/concert releases). 
+                Toggling "Unique Subunits Only" ON eliminates all full-unit songs (full-unit songs also include historic units lineups, such as NCT 127 with 5 members).
+            </div>
+        </div>
+        <div class="row">
+            <svg id="chord" height="600" width="600" style="background: #fff; margin-top:50px"></svg>
+            <div id="tooltip"></div>
+            <div id="song_table"></div>
+        </div>
+    </main>
+    </body>
+    </html>
+
+    <script>
+        let tooltip = d3.select("#tooltip")
+        tooltip.append("div").text("Hover over a member on the chord diagram to see details").attr("id", "MemberName");
+        let tooltip_table = tooltip.append("table").attr("id", "table")
+        let tooltip_tr = tooltip_table.append("tr")
+        tooltip_tr.append("th").text("Member").style("font-weight", "bold").attr("class", "theads")
+        tooltip_tr.append("th").text("Number of Songs").style("font-weight", "bold").attr("class", "theads")
+        tooltip_tr.append("th").text("Proportion of Total Songs").style("font-weight", "bold").attr("class", "theads")
+
+        for(i=0; i<22; i++){
+            let tooltip_tr = tooltip_table.append("tr").attr("id", `tr${i}`).attr('class', 'hover')
+            tooltip_tr.append("th").attr("id", `name${i}`)
+            tooltip_tr.append("th").attr("id", `weight${i}`)
+            tooltip_tr.append("th").attr("id", `weight_prop${i}`)
+        }
+    </script>
+
+    <script>
+        let song_hover = d3.select("#song_table")
+        song_hover.append("div").attr("id", "hover_title").text("Hover over a member on the table to see song collaborations").style("font-weight", "bold");
+        let song_table = song_hover.append("table").attr("id", "songtable")
+        let song_tr = song_table.append("tr").attr("id", "songtable_tr")
+        song_tr.append("th").text("Song Title").style("font-weight", "bold").attr("class", "theads")
+        song_tr.append("th").text("Date").style("font-weight", "bold").attr("class", "theads")
+        song_tr.append("th").text("Group").style("font-weight", "bold").attr("class", "theads")
+
+        // for(i=0; i<154; i++){
+        //     let song_tr = song_table.append("tr").attr("id", `tr_s${i}`)
+        //     song_tr.append("th").attr("id", `SongTitle${i}`)
+        //     song_tr.append("th").attr("id", `Date${i}`)
+        //     song_tr.append("th").attr("id", `Group${i}`)
+        // }
+    </script>
+    
+    <script>
+        const width = d3.select("#chord").attr("width");
+        const height = d3.select("#chord").attr("height");
+        const chordChart = d3.select("#chord").append("g");
+
+        //const colorPalette = ['#b8d432', '#6f8111', 'grey', '#308474', '#d131b5']
+        //const colorPalette = ['#b8d432', '#c39c82', 'grey', '#002075', '#d131b5']
+        const colorPalette = ['#d131b5', '#b8d432', '#c39c82', 'grey', '#002075']
+        
+        const drawChord = async () => {
+            //const nct = await d3.json("chord_data.json");
+            const nct = await d3.json("chord_data_order1_s.json");
+            //const nct_withoutmain = await d3.json("chord_data_order1_withoutmain.json");
+            const nct_disc = await d3.csv('NCT_csv_order1.csv')
+
+            console.log(nct);
+            
+            let nodes = nct.nodes;
+            let links = nct.edges;
+
+            // nodes.forEach(d=>{
+            //     d.group1 = d.groups[0]
+            // })
+
+            console.log(nodes)
+
+            //set up adjacency matrix
+            let matrix = []; // dense edge matrix
+            let connections = {}; 
+            for (let i=0; i<nodes.length; i++) { 
+                let row = [];
+                for (let j=0; j<nodes.length; j++) { row.push(0); }
+                
+                matrix.push(row);
+                connections[i] = [i];
+            }
+            //console.log(matrix); //empty matrix complete
+
+            links.forEach( d => {
+            if (d.weight > 0) {
+                // matrix[d.sourceIndex][d.targetIndex] = d.weight;
+                // matrix[d.targetIndex][d.sourceIndex] = d.weight;
+                matrix[d.sourceIndex][d.targetIndex] = d.weight_prop;
+                matrix[d.targetIndex][d.sourceIndex] = d.weight_prop;
+                connections[d.sourceIndex].push(d.targetIndex);
+                connections[d.targetIndex].push(d.sourceIndex);
+            }
+            });
+            // console.log(matrix);
+            // console.log(connections);
+
+            let radius = (width / 2.0) - 125;
+            //chord diagram generator
+            let chordGen = d3.chord()
+                            .padAngle(.04)
+                            .sortSubgroups(d3.descending)
+                            .sortChords(d3.descending)
+            //outer arc generator
+            let arcGen = d3.arc()
+                            .innerRadius(radius)
+                            .outerRadius(radius + 20)
+            //ribbon generator
+            let ribbonGen = d3.ribbon()
+                            .radius(radius)
+            let chords = chordGen(matrix);
+            // console.log(chords);
+
+            chordChart.attr("transform",`translate(${width/2.0},${height/2.0})`);
+
+    
+            //RINGS AND RIBBONS
+            let colorScale = d3.scaleOrdinal().range(colorPalette);
+
+            let ringContainer = chordChart.append("g");
+            let rings = ringContainer.selectAll("g.segment")
+                                    .data(chords.groups)
+                                    .join("g")
+                                    .attr("class","segment");
+
+            // OUTER RING
+            //special outer outline 
+            rings.append("path")
+                .attr("fill", "none")
+                .attr("stroke", d=> (nodes[d.index].groups[2]==null) ? "none" : colorScale(nodes[d.index].groups[2]))
+                .attr('stroke-width', 5)
+                .attr("class", "look")
+                .attr("d", arcGen)
+
+            //regular outline
+            rings.append("path")
+                .attr("fill", d => colorScale(nodes[ d.index ].groups[0] ))
+                .attr("stroke", d => (nodes[d.index].groups[1]==null) ? colorScale( nodes[ d.index ].groups[0]): colorScale(nodes[d.index].groups[1]))
+                .attr('stroke-width', 2)
+                //.attr("border", "black")
+                //.attr("stroke", console.log(nodes[ d.index ].groups ))
+                .attr("d", arcGen);
+
+            //RIBBONS
+            let ribbonContainer = chordChart.append("g");
+            let ribbons = ribbonContainer.selectAll("path.ribbon")
+                            .data(chords)
+                            .join("path")
+                            .attr("class","ribbon")
+                            .attr("fill-opacity", 0.5)
+                            .attr("stroke", "none")
+                            .attr("fill", d => colorScale( nodes[ d.source.index ].groups[0] ))
+                            .attr("d", ribbonGen);
+
+            ringContainer.raise()
+            
+
+            //TEXT
+            chords.groups.forEach( d => {
+                let transform = '';
+                
+                let midpoint = (d.startAngle + d.endAngle) / 2;
+                let rotation = ( midpoint ) * ( 180 / Math.PI ) - 90;
+                
+                transform = transform + ` rotate(${rotation})`;
+                transform = transform + ` translate(${radius+25}, 0)`;
+                
+                if (rotation > 90) {
+                    transform = transform + ' rotate(180)';
+
+                    d.anchor = "end";
+                }
+                d.transform = transform;
+            });
+            
+            rings.append("text")
+                .attr("transform", d => d.transform)
+                .text(d => nodes[ d.index ].name)
+                .attr("text-anchor", d => d.anchor)
+                .attr("class", `chord_textlabels`); 
+              
+            // interactions
+            function restoreHighlights(rings, ribbons) {
+                rings.attr("opacity", 1);   // both text and ring
+                ribbons.attr("opacity", 1);
+            }
+            function lowlightAll() {
+                rings.attr("opacity", 0.2); // both text and ring
+                ribbons.attr("opacity", 0.2);
+            }
+            
+        
+            function highlightRings(index) {
+                let targetSegments = rings.filter( d => {
+                    return connections[d.index].includes(index);  
+                });
+                targetSegments.attr("opacity",1);
+            }
+            
+            function highlightRibbons(index) {
+                let targetRibbons = ribbons.filter( d => {
+                    return d.source.index === index || d.target.index === index;
+            });
+                targetRibbons.attr("opacity",1);
+            }
+            
+            rings.on("mouseout", restoreHighlights(rings, ribbons)) //this one doesn't do mouseout
+            // rings.on("mouseout", function(event, d){
+            //     restoreHighlights(rings, ribbons)
+
+            // })
+                .on("mouseover", function(event, d) {
+                    lowlightAll();
+                    highlightRings(d.index);
+                    highlightRibbons(d.index);
+                    toolTip(d.index, nodes, links)
+                    deleteAllRows("songtable");
+                    });
+            
+            // BUILD THE SUBUNIT CHORD  ---------------------------------------
+            // const nct_withoutmain = await d3.json("chord_data_order1_withoutmain.json");
+            const nct_withoutmain = await d3.json("chord_data_order1_withoutmain_withsongs.json");
+
+            console.log("new", nct_withoutmain);
+            
+            let nodes_subunit = nct_withoutmain.nodes;
+            let links_subunit = nct_withoutmain.edges;
+
+            //set up adjacency matrix
+            let matrix_subunit = []; // dense edge matrix
+            let connections_subunit = {}; 
+
+            for (let i=0; i<nodes_subunit.length; i++) { 
+                let row = [];
+                for (let j=0; j<nodes_subunit.length; j++) { row.push(0); }
+                
+                matrix_subunit.push(row);
+                connections_subunit[i] = [i];
+            }
+
+            links_subunit.forEach( d => {
+            if (d.weight > 0) {
+                // matrix[d.sourceIndex][d.targetIndex] = d.weight;
+                // matrix[d.targetIndex][d.sourceIndex] = d.weight;
+                matrix_subunit[d.sourceIndex][d.targetIndex] = d.weight_prop;
+                matrix_subunit[d.targetIndex][d.sourceIndex] = d.weight_prop;
+                connections_subunit[d.sourceIndex].push(d.targetIndex);
+                connections_subunit[d.targetIndex].push(d.sourceIndex);
+            }
+            });
+
+            let chords_subunit = chordGen(matrix_subunit);
+            // console.log(chords_subunit);
+
+            chordChart.attr("transform",`translate(${width/2.0},${height/2.0})`);
+
+            let ringContainer_subunit = chordChart.append("g");
+            let rings_subunit = ringContainer_subunit.selectAll("g.segment")
+                                    .data(chords_subunit.groups)
+                                    .join("g")
+                                    .attr("class","segment");
+
+            // OUTER RING
+            //special outer outline 
+            rings_subunit.append("path")
+                .attr("fill", "none")
+                .attr("stroke", d=> (nodes[d.index].groups[2]==null) ? "none" : colorScale(nodes[d.index].groups[2]))
+                .attr('stroke-width', 5)
+                .attr("class", "look")
+                .attr("d", arcGen)
+
+            //regular outline
+            rings_subunit.append("path")
+                .attr("fill", d => colorScale(nodes[ d.index ].groups[0] ))
+                .attr("stroke", d => (nodes[d.index].groups[1]==null) ? colorScale( nodes[ d.index ].groups[0]): colorScale(nodes[d.index].groups[1]))
+                .attr('stroke-width', 2)
+                //.attr("border", "black")
+                //.attr("stroke", console.log(nodes[ d.index ].groups ))
+                .attr("d", arcGen);
+
+            //RIBBONS
+            let ribbonContainer_subunit = chordChart.append("g");
+            let ribbons_subunit = ribbonContainer_subunit.selectAll("path.ribbon")
+                            .data(chords_subunit)
+                            .join("path")
+                            .attr("class","ribbon")
+                            .attr("fill-opacity", 0.5)
+                            .attr("stroke", "none")
+                            .attr("fill", d => colorScale( nodes[ d.source.index ].groups[0] ))
+                            .attr("d", ribbonGen);
+
+            ribbonContainer_subunit.raise()
+            
+
+            //TEXT
+            chords_subunit.groups.forEach( d => {
+                let transform = '';
+                
+                let midpoint = (d.startAngle + d.endAngle) / 2;
+                let rotation = ( midpoint ) * ( 180 / Math.PI ) - 90;
+                
+                transform = transform + ` rotate(${rotation})`;
+                transform = transform + ` translate(${radius+25}, 0)`;
+                
+                if (rotation > 90) {
+                    transform = transform + ' rotate(180)';
+
+                    d.anchor = "end";
+                }
+                d.transform = transform;
+            });
+            
+            rings_subunit.append("text")
+                .attr("transform", d => d.transform)
+                .text(d => nodes[ d.index ].name )
+                .attr("text-anchor", d => d.anchor); 
+              
+            // interactions
+            // function restoreHighlights_subunit() {
+            //     rings_subunit.attr("opacity", 1);   // both text and ring
+            //     ribbons_subunit.attr("opacity", 1);
+            // }
+            function lowlightAll_subunit() {
+                rings_subunit.attr("opacity", 0.2); // both text and ring
+                ribbons_subunit.attr("opacity", 0.2);
+            }
+            
+        
+            function highlightRings_subunit(index) {
+                let targetSegments_subunit = rings_subunit.filter( d => {
+                    return connections_subunit[d.index].includes(index);  
+                });
+                targetSegments_subunit.attr("opacity",1);
+            }
+            
+            function highlightRibbons_subunit(index) {
+                let targetRibbons_subunit = ribbons_subunit.filter( d => {
+                    return d.source.index === index || d.target.index === index;
+            });
+                targetRibbons_subunit.attr("opacity",1);
+
+                // let all_textlabels_subunit = rings_subunit.selectAll("chord_textlabels")
+                // console.log(all_textlabels_subunit)
+                // all_textlabels_subunit.forEach(d=>{
+                //     console.log(d.text())
+                // })
+            }
+
+            function toolTip(index, nodes_subunit, links_subunit){
+                selected = nodes_subunit[index].name
+                //index_links only has links related to this person
+                index_links = links_subunit.filter((
+                    {source}
+                ) => selected.includes(source)
+                )
+                //sort links based on weight
+                index_links.sort(function(a,b) {
+                    return b.weight - a.weight
+                });
+                // console.log(index_links, "HERE")
+
+                d3.selectAll("#MemberName").text(`${nodes_subunit[index].name}, Total Songs: ${nodes_subunit[index].weight}`)
+                for(i=0;i<22;i++){
+                    let background_color = d3.hsl(colorScale(nodes_subunit[index_links[i]['targetIndex']].groups[0]))
+                    background_color.opacity = 0.5
+                    d3.select(`#tr${i}`).style("background-color", background_color)
+                    d3.selectAll(`#name${i}`).text(index_links[i]['target'])
+                    d3.selectAll(`#weight${i}`).text(index_links[i]['weight'])
+                    d3.selectAll(`#weight_prop${i}`).text(index_links[i]['weight_prop'].toFixed(2))
+                    if(nodes_subunit[index_links[i]['targetIndex']].groups[1]!=null){
+                        // d3.selectAll(`#name${i}`).style("border-color", `${colorScale(nodes_subunit[index_links[i]['targetIndex']].groups[1])}`)
+                        // d3.selectAll(`#weight${i}`).style("border-color", `${colorScale(nodes_subunit[index_links[i]['targetIndex']].groups[1])}`)
+                        // d3.selectAll(`#weight_prop${i}`).style("border-color", `${colorScale(nodes_subunit[index_links[i]['targetIndex']].groups[1])}`)
+                        d3.selectAll(`#name${i}`).style("color", `${colorScale(nodes_subunit[index_links[i]['targetIndex']].groups[1])}`)
+                        d3.selectAll(`#weight${i}`).style("color", `${colorScale(nodes_subunit[index_links[i]['targetIndex']].groups[1])}`)
+                        d3.selectAll(`#weight_prop${i}`).style("color", `${colorScale(nodes_subunit[index_links[i]['targetIndex']].groups[1])}`)
+                    }
+                    else{
+                        d3.selectAll(`#name${i}`).style("color", `black`)
+                        d3.selectAll(`#weight${i}`).style("color", `black`)
+                        d3.selectAll(`#weight_prop${i}`).style("color", `black`)
+                    }
+                    if(nodes_subunit[index_links[i]['targetIndex']].groups[2]!=null){
+                            d3.selectAll(`#name${i}`).style("text-decoration", "underline").style("text-decoration-color", `${colorScale(nodes_subunit[index_links[i]['targetIndex']].groups[2])}`)
+                            d3.selectAll(`#weight${i}`).style("text-decoration", "underline").style("text-decoration-color", `${colorScale(nodes_subunit[index_links[i]['targetIndex']].groups[2])}`)
+                            d3.selectAll(`#weight_prop${i}`).style("text-decoration", "underline").style("text-decoration-color", `${colorScale(nodes_subunit[index_links[i]['targetIndex']].groups[2])}`)
+                    }
+                    else{
+                        d3.selectAll(`#name${i}`).style("text-decoration", `none`)
+                        d3.selectAll(`#weight${i}`).style("text-decoration", `none`)
+                        d3.selectAll(`#weight_prop${i}`).style("text-decoration", `none`)
+                    }
+                }
+        
+                
+            }
+            // function clearSongs(){
+            //     for(i=0;i<154;i++){
+            //         d3.selectAll(`#SongTitle${i}`).text("")
+            //         d3.selectAll(`#Date${i}`).text("")
+            //         d3.selectAll(`#Group${i}`).text("")
+            //     }
+            //     clearSongRows();
+            // }
+            
+            // rings_subunit.on("mouseout", function(event, d){
+            //     restoreHighlights(rings_subunit, ribbons_subunit)
+
+            // })
+            rings_subunit//.on("mouseout", restoreHighlights(rings_subunit, ribbons_subunit))
+                .on("mouseover", function(event, d) {
+                    lowlightAll_subunit();
+                    highlightRings_subunit(d.index);
+                    highlightRibbons_subunit(d.index);
+                    toolTip(d.index, nodes_subunit, links_subunit)
+                    deleteAllRows("songtable");
+                    });
+
+            // console.log("chords", chords_subunit.groups)
+            let table_rows = d3.selectAll("tr.hover")
+                                .on("mouseover", function(){
+                                    console.log()
+                                    for(i=0;i<22;i++){
+                                        let background_color = d3.hsl(colorScale(nodes_subunit[index_links[i]['targetIndex']].groups[0]))
+                                        background_color.opacity = 0.5
+                                        d3.select(`#tr${i}`).style("background-color", background_color)
+                                    }
+                                    // console.log("THIS", d3.select(this))
+                                    d3.select(this).style("background-color", "yellow")
+                                    let member_details = []
+                                    let table_id = d3.select(this).attr("id").substring(2)
+                                    let hover_member = d3.select(`th#name${table_id}`).text()
+                                    let table_member = d3.selectAll("#MemberName").text().substring(0, d3.selectAll("#MemberName").text().indexOf(","))
+                                    let hover_songs;
+                                    // console.log(`looking for ${table_member} and ${hover_member}`, nct_withoutmain.edges)
+                                    if(document.getElementById("subunits").checked){
+                                        nct_withoutmain.edges.forEach(d=>{
+                                            if(hover_member==d.target && table_member==d.source){
+                                                // console.log(`I found that ${hover_member}==${d.target} and ${table_member}==${d.source}`)
+                                                hover_songs = d.sub_songs
+                                                // console.log("hoversongs 1 found")
+                                            }
+                                           
+                                        })
+                                    }
+                                    else{
+                                        nct_withoutmain.edges.forEach(d=>{
+                                            if(hover_member==d.target && table_member==d.source){
+                                                hover_songs = d.all_songs
+                                            }
+                                        })
+                                    }
+                                    
+                                    // console.log("hover testing", hover_songs, hover_songs.length)
+                                    // for(i=0;i<154;i++){
+                                    //     d3.selectAll(`#SongTitle${i}`).text("")
+                                    //     d3.selectAll(`#Date${i}`).text("")
+                                    //     d3.selectAll(`#Group${i}`).text("")
+                                    // }
+                                    // console.log("hover songs", hover_songs)
+
+                                    //clear the whole song table 
+                                    deleteAllRows("songtable")
+                                    //add new rows to the song table
+                                    hover_songs.forEach(d=>{
+                                        addRow("songtable", d)
+                                    })
+                                    d3.select("#hover_title").text(`Songs both ${table_member} and ${hover_member} have appeared on:`)
+
+
+                                    //good stuff
+                                    // for(i=0;i<154;i++){
+                                    //     console.log(d3.selectAll(`#SongTitle${i}`).text())
+                                    //     if(d3.selectAll(`#SongTitle${i}`).text() == ""){
+                                    //         console.log(`${i} IS NULL`)
+                                    //         document.getElementById(`tr_s${i}`).remove();
+                                    //     }
+                                    // }
+
+                                    // console.log("disc", nct_disc)
+                                    
+                                })
+
+            function addRow(tableID, d){
+                var table = document.getElementById(tableID);
+
+                var rowCount = table.rows.length;
+                var row = table.insertRow(rowCount);
+
+                var cell1 = row.insertCell(0);
+                cell1.innerHTML = nct_disc[d]['Song Title'];
+
+                var cell2 = row.insertCell(1);
+                cell2.innerHTML = nct_disc[d]['Date'];
+
+                var cell3 = row.insertCell(2);
+                cell3.innerHTML = nct_disc[d]['Group'];
+            }
+
+            // function deleteRows(tableID, i){
+            //     var table = document.getElementById(tableID);
+            //     var rowCount = table.rows.length-1;
+            //     console.log(rowCount, i)
+            //     if(rowCount>i){
+            //         for(j=i; j<=rowCount; j++){
+            //             table.deleteRow(j);
+            //         }
+            //     }
+            // }   
+
+            function deleteAllRows(tableID){
+                var table = document.getElementById(tableID);
+                var rowCount = table.rows.length;
+                // console.log("rowcont", rowCount)
+                if(rowCount>1){
+                    for(i=0; i<rowCount-1; i++){
+                        table.deleteRow(1);
+                    }
+                }
+                d3.select("#hover_title").text(`Hover over a member on the table to see song collaborations`)
+
+                
+            }
+            
+            function resetTable(tableID){
+                var table = document.getElementById(tableID);
+                var rowCount = table.rows.length;
+                for(i=0;i<rowCount;i++){
+                    d3.selectAll(`#name${i}`).text("")
+                    d3.selectAll(`#weight${i}`).text("")
+                    d3.selectAll(`#weight_prop${i}`).text("")
+                    d3.select(`#tr${i}`).style("background-color", (i%2 ? "white": "#dddddd" ))
+                    d3.selectAll("#MemberName").text("Hover over a member on the chord diagram to see details")
+                    // d3.select("#hover_title").text(`Hover over a member on the table to see song collaborations`)
+                }
+            }
+
+        
+            //by default, subunits is hidden
+            ringContainer_subunit.attr("visibility", "hidden")
+            ribbonContainer_subunit.attr("visibility", "hidden")
+
+
+
+            
+            // TOGGLE BUTTON ---------------------
+            subunit_toggle = d3.select("#subunits").on("change", function(){
+            subunit_on = document.getElementById("subunits").checked
+            if(subunit_on){
+                ringContainer.attr("visibility", "hidden")
+                ribbonContainer.attr("visibility", "hidden")
+                ringContainer_subunit.attr("visibility", "visible")
+                ribbonContainer_subunit.attr("visibility", "visible")
+                restoreHighlights(rings_subunit, ribbons_subunit)
+                deleteAllRows("songtable")
+                resetTable("table")
+            }
+            else{
+                ringContainer.attr("visibility", "visible")
+                ribbonContainer.attr("visibility", "visible")
+                ringContainer_subunit.attr("visibility", "hidden")
+                ribbonContainer_subunit.attr("visibility", "hidden")
+                restoreHighlights(rings, ribbons)
+                deleteAllRows("songtable")
+                resetTable("table")
+            }
+            
+
+        })
+
+        }
+
+        drawChord();
+        
+
+        </script>
